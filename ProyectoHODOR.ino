@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <RTClib.h>
 #include <SD.h>
+#include <EEPROM.h>
 
 
 //int ledPin = 13;              // LED connected to digital pin 13
@@ -10,21 +11,22 @@ bool debug =true;
 
 int i=0;
 int n=0;
+int nCards=85;
+int eeAddress=0;
+unsigned long Cards=0,CardsCheck=0; 
    
 
 RTC_DS3231 rtc;
 
 WIEGAND wg;
 
-char daysOfTheWeek[7][10] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 char dateBuffer[3];
-
 
 
 void setup(){
 
   
-  Serial.begin(9600);
+  Serial.begin(115200);
   while (!Serial) { ; // wait for serial port to connect. Needed for native USB port only
   }
 
@@ -34,49 +36,86 @@ void setup(){
     // don't do anything more:
     return;
   }
-  Serial.println("card initialized.");  
-  Serial.println("Cargando datos Numero Tarjetas...");
-
+  Serial.println("card initialized.");
   
-  File dataFile = SD.open("Cardslog.txt");
+ if  (SD.exists("Cardslog.txt")){
+
+   File dataFile = SD.open("Cardslog.txt");
+
+  Serial.println("Cargando datos Numero Tarjetas...");
 
   if (dataFile) {
 
     char dataString[9] = "";
-    n=dataFile.size()/9;
-    Serial.print("numero de tarjetas");
-    Serial.println(n,DEC);
-    
-    unsigned long Cards[n];
-    n=0;
+    nCards=dataFile.size()/9;
+    Serial.print("Numero de tarjetas registradas: ");
+    Serial.println(nCards,DEC);
     
     dataFile.rewindDirectory();
 
     while (dataFile.available()){
-      
-      Serial.println(dataFile.read());
-      
+
       dataString[i] = dataFile.read();
-      i++;
+
+      Serial.print("Char dataString[");
+      Serial.print(i);
+      Serial.print("] :");
+      Serial.print(dataString[i]);
+      Serial.print(" DEC:");
+      Serial.println(dataString[i],DEC);      
       
-      if(dataString[i] == 10){
-        Cards[n]=atoi(dataString);
-        Serial.print("Cards ");       
-        Serial.println(Cards[n],DEC);
+
+      
+      if(dataString[i] == '\n'){
+        Cards=atol(dataString);
+        EEPROM.get(eeAddress, CardsCheck);
+
+        if(Cards != CardsCheck){ //compara q el numero en EEprom sea distinto
+        
+        EEPROM.put(eeAddress, Cards);
+        Serial.println("Dato actualizado");
+        }
+               
+        Serial.print("Cards: ");
+        Serial.println(Cards,DEC);
+
+        EEPROM.get(eeAddress, CardsCheck);       
+
+        Serial.print("EEPROM direcction: ");
+        Serial.print(eeAddress);
+        Serial.print(" :");       
+        Serial.println(CardsCheck,DEC);
+
+        eeAddress += sizeof(long);
         i=0;
-        n++;
+
+      }   else{
+              i++;
       }
+
           
     }
-      
-      
+          
     dataFile.close();
     
     Serial.println("done uploading Cards IDs.");
-    
-  } else {
+    eeAddress=0;
+
+    if (SD.remove("Cardslog.txt")){
+      Serial.println("Cardslog.txt deleted...");
+    }
+      else{
+       Serial.println("ERROR!! Cardslog.txt Wasn't deleted...");
+      }
+
+      } else {
     // if the file didn't open, print an error:
     Serial.println("error opening Cardslog.txt file");
+    }
+  } else {
+
+    Serial.println("Cardslog.txt isnt presente. EEPROM memory used");
+    
   }
 
   
@@ -110,6 +149,21 @@ void loop()
 
 if(wg.available()){
 
+  for(eeAddress=0;eeAddress<=(nCards*4); eeAddress += sizeof(long)){
+    
+    EEPROM.get(eeAddress, CardsCheck);
+//    Serial.println("");
+//    Serial.print("eeAddress: ");
+//    Serial.println(eeAddress);
+//    Serial.print("CardsCheck: ");
+//    Serial.println(CardsCheck);
+    if(wg.getCode()== CardsCheck){
+      Serial.println("EEEEE... PUERTA ABIERTA");
+      
+      break;
+    }
+  }
+
     char dataString[8] = ""; // make a string for assembling the data to log:
     DateTime now = rtc.now();
 
@@ -129,9 +183,7 @@ if(wg.available()){
     Serial.print(now.month(), DEC);
     Serial.print('/');
     Serial.print(now.day(), DEC);
-    Serial.print(" (");
-    Serial.print(daysOfTheWeek[now.dayOfTheWeek()]);
-    Serial.print(") ");
+    Serial.print("");
     Serial.print(now.hour(), DEC);
     Serial.print(':');
     Serial.print(now.minute(), DEC);
