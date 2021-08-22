@@ -5,15 +5,18 @@
 #include <EEPROM.h>
 
 
-//int ledPin = 13;              // LED connected to digital pin 13
+
 const int chipSelect = 4;
 bool debug =true;
+bool AbrirPuerta =false;
 
 int i=0;
 int n=0;
-int nCards=85;
+int nCards=0;
+int eeAddnCards = EEPROM.length()-2;
 int eeAddress=0;
-unsigned long Cards=0,CardsCheck=0; 
+unsigned long Cards=0,CardsCheck=0;
+//int ledPin = 13;
    
 
 RTC_DS3231 rtc;
@@ -25,24 +28,19 @@ char dateBuffer[3];
 
 void setup(){
 
+  pinMode(7, OUTPUT);
+  digitalWrite(7, HIGH);
   
-  Serial.begin(115200);
+  Serial.begin(9600);
   while (!Serial) { ; // wait for serial port to connect. Needed for native USB port only
   }
-
-  Serial.println("Initializing SD card...");  // see if the card is present and can be initialized:
   if (!SD.begin(chipSelect)) {
    Serial.println("Card failed, or not present");
-    // don't do anything more:
-    return;
   }
-  Serial.println("card initialized.");
   
  if  (SD.exists("Cardslog.txt")){
 
    File dataFile = SD.open("Cardslog.txt");
-
-  Serial.println("Cargando datos Numero Tarjetas...");
 
   if (dataFile) {
 
@@ -56,16 +54,7 @@ void setup(){
     while (dataFile.available()){
 
       dataString[i] = dataFile.read();
-
-      Serial.print("Char dataString[");
-      Serial.print(i);
-      Serial.print("] :");
-      Serial.print(dataString[i]);
-      Serial.print(" DEC:");
-      Serial.println(dataString[i],DEC);      
-      
-
-      
+     
       if(dataString[i] == '\n'){
         Cards=atol(dataString);
         EEPROM.get(eeAddress, CardsCheck);
@@ -76,21 +65,12 @@ void setup(){
         Serial.println("Dato actualizado");
         }
                
-        Serial.print("Cards: ");
-        Serial.println(Cards,DEC);
-
         EEPROM.get(eeAddress, CardsCheck);       
-
-        Serial.print("EEPROM direcction: ");
-        Serial.print(eeAddress);
-        Serial.print(" :");       
-        Serial.println(CardsCheck,DEC);
-
         eeAddress += sizeof(long);
         i=0;
 
       }   else{
-              i++;
+        i++;
       }
 
           
@@ -99,14 +79,22 @@ void setup(){
     dataFile.close();
     
     Serial.println("done uploading Cards IDs.");
-    eeAddress=0;
 
-    if (SD.remove("Cardslog.txt")){
-      Serial.println("Cardslog.txt deleted...");
+        for(eeAddress;eeAddress < (EEPROM.length()-2);eeAddress+=1){
+         EEPROM.write(eeAddress, 0);
     }
-      else{
+
+     EEPROM.get(eeAddnCards, CardsCheck);
+
+     if(nCards != CardsCheck){
+
+        EEPROM.put(eeAddnCards, nCards);
+      
+     }
+
+    if (!SD.remove("Cardslog.txt")){
        Serial.println("ERROR!! Cardslog.txt Wasn't deleted...");
-      }
+    }
 
       } else {
     // if the file didn't open, print an error:
@@ -115,26 +103,28 @@ void setup(){
   } else {
 
     Serial.println("Cardslog.txt isnt presente. EEPROM memory used");
+    EEPROM.get(eeAddnCards, nCards);
     
   }
 
-  
-   
+  //Actualico nCards para saber el numero de tarjetas presentes. 
 
-  Serial.println("Initializing Wiegand Protocol...");
+     
+     EEPROM.get(eeAddnCards, CardsCheck);
+
+     if(nCards != CardsCheck){
+
+        EEPROM.put(eeAddnCards, nCards);
+      
+     }
+
   wg.begin(2,0,3,1,debug); //Inicializa protocolo Wiegand. Ultimo argumento Debug
-  Serial.println("Wiegand initialized.");
   
- // pinMode(ledPin, OUTPUT);      // sets the digital pin as output
-
   if (! rtc.begin()) {
     Serial.println("Couldn't find RTC");
-  //  while (1);
   }
 
   else if (rtc.lostPower()) {
-    Serial.println("RTC lost power, lets set the time!");
-    // following line sets the RTC to the date & time this sketch was compiled
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
     // This line sets the RTC with an explicit date & time, for example to set
     // January 21, 2014 at 3am you would call:
@@ -149,17 +139,15 @@ void loop()
 
 if(wg.available()){
 
-  for(eeAddress=0;eeAddress<=(nCards*4); eeAddress += sizeof(long)){
+  for(eeAddress=0;eeAddress<(nCards*4); eeAddress += sizeof(long)){
     
     EEPROM.get(eeAddress, CardsCheck);
-//    Serial.println("");
-//    Serial.print("eeAddress: ");
-//    Serial.println(eeAddress);
-//    Serial.print("CardsCheck: ");
-//    Serial.println(CardsCheck);
+
     if(wg.getCode()== CardsCheck){
-      Serial.println("EEEEE... PUERTA ABIERTA");
       
+      
+     Serial.println("EEEEE... PUERTA ABIERTA");
+     AbrirPuerta = true;
       break;
     }
   }
@@ -167,31 +155,6 @@ if(wg.available()){
     char dataString[8] = ""; // make a string for assembling the data to log:
     DateTime now = rtc.now();
 
-    if(debug){
-      
-    Serial.println("");
-    Serial.print("Wiegand HEX = ");
-    Serial.print(wg.getCode(),HEX);
-    Serial.print(", DECIMAL = ");
-    Serial.print(wg.getCode());
-    Serial.print(", Type W");
-    Serial.println(wg.getWiegandType());
-    Serial.println("");
-
-    Serial.print(now.year(), DEC);
-    Serial.print('/');
-    Serial.print(now.month(), DEC);
-    Serial.print('/');
-    Serial.print(now.day(), DEC);
-    Serial.print("");
-    Serial.print(now.hour(), DEC);
-    Serial.print(':');
-    Serial.print(now.minute(), DEC);
-    Serial.print(':');
-    Serial.print(now.second(), DEC);
-    Serial.println();
-    }
-    
     sprintf(dataString, "%07lu" ,wg.getCode()); //Set number to 7 digits. Add left zeros. 
 
     File dataFile = SD.open("Datalog.txt", FILE_WRITE);
@@ -223,6 +186,15 @@ if(wg.available()){
     Serial.print("dataString: ");
     Serial.println(dataString);
   }    
+  }
+
+  if(AbrirPuerta){
+    
+    AbrirPuerta=false;
+    digitalWrite(7, LOW);
+    delay(5000);
+    digitalWrite(7, HIGH);
+    
   }
 }
 
