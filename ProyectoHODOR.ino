@@ -29,6 +29,7 @@ char dateBuffer[3];
 void setup(){
 
   pinMode(7, OUTPUT);
+  pinMode(5, INPUT);
   digitalWrite(7, HIGH);
   
   Serial.begin(9600);
@@ -37,76 +38,10 @@ void setup(){
   if (!SD.begin(chipSelect)) {
    Serial.println("Card failed, or not present");
   }
+
+  cardslog();
+
   
- if  (SD.exists("Cardslog.txt")){
-
-   File dataFile = SD.open("Cardslog.txt");
-
-  if (dataFile) {
-
-    char dataString[9] = "";
-    nCards=dataFile.size()/9;
-    Serial.print("Numero de tarjetas registradas: ");
-    Serial.println(nCards,DEC);
-    
-    dataFile.rewindDirectory();
-
-    while (dataFile.available()){
-
-      dataString[i] = dataFile.read();
-     
-      if(dataString[i] == '\n'){
-        Cards=atol(dataString);
-        EEPROM.get(eeAddress, CardsCheck);
-
-        if(Cards != CardsCheck){ //compara q el numero en EEprom sea distinto
-        
-        EEPROM.put(eeAddress, Cards);
-        Serial.println("Dato actualizado");
-        }
-               
-        EEPROM.get(eeAddress, CardsCheck);       
-        eeAddress += sizeof(long);
-        i=0;
-
-      }   else{
-        i++;
-      }
-
-          
-    }
-          
-    dataFile.close();
-    
-    Serial.println("done uploading Cards IDs.");
-
-        for(eeAddress;eeAddress < (EEPROM.length()-2);eeAddress+=1){
-         EEPROM.write(eeAddress, 0);
-    }
-
-     EEPROM.get(eeAddnCards, CardsCheck);
-
-     if(nCards != CardsCheck){
-
-        EEPROM.put(eeAddnCards, nCards);
-      
-     }
-
-    if (!SD.remove("Cardslog.txt")){
-       Serial.println("ERROR!! Cardslog.txt Wasn't deleted...");
-    }
-
-      } else {
-    // if the file didn't open, print an error:
-    Serial.println("error opening Cardslog.txt file");
-    }
-  } else {
-
-    Serial.println("Cardslog.txt isnt presente. EEPROM memory used");
-    EEPROM.get(eeAddnCards, nCards);
-    
-  }
-
   //Actualico nCards para saber el numero de tarjetas presentes. 
 
      
@@ -121,7 +56,7 @@ void setup(){
   wg.begin(2,0,3,1,debug); //Inicializa protocolo Wiegand. Ultimo argumento Debug
   
   if (! rtc.begin()) {
-    Serial.println("Couldn't find RTC");
+ //   Serial.println("Couldn't find RTC");
   }
 
   else if (rtc.lostPower()) {
@@ -137,6 +72,10 @@ void setup(){
 void loop()
 {
 
+if(!digitalRead(5)){
+        AbrirPuerta = true;  
+}
+
 if(wg.available()){
 
   for(eeAddress=0;eeAddress<(nCards*4); eeAddress += sizeof(long)){
@@ -145,9 +84,7 @@ if(wg.available()){
 
     if(wg.getCode()== CardsCheck){
       
-      
-     Serial.println("EEEEE... PUERTA ABIERTA");
-     AbrirPuerta = true;
+      AbrirPuerta = true;
       break;
     }
   }
@@ -180,6 +117,12 @@ if(wg.available()){
     sprintf(dateBuffer,"%02u",now.second());
     dataFile.print(dateBuffer);
     dataFile.print(" ");
+    if(AbrirPuerta){
+      dataFile.print("SI");
+    } else{
+        dataFile.print("NO");
+    }
+    dataFile.print(" ");
     dataFile.println();
     dataFile.close();
     // print to the serial port too:
@@ -188,14 +131,97 @@ if(wg.available()){
   }    
   }
 
-  if(AbrirPuerta){
-    
-    AbrirPuerta=false;
+  if(AbrirPuerta){    
+    cerradura();        
+  }
+  
+}
+
+
+
+void cerradura(void){
+     AbrirPuerta=false;
     digitalWrite(7, LOW);
     delay(5000);
     digitalWrite(7, HIGH);
+}
+
+void cardslog(void){
+
+   if  (SD.exists("Cardslog.txt")){
+
+   File dataFile = SD.open("Cardslog.txt");
+
+       if (dataFile) {
+
+         char dataString[9] = "";
+         nCards=dataFile.size()/9;
+         Serial.print("Numero de tarjetas registradas: ");
+         Serial.println(nCards,DEC);
+    
+         dataFile.rewindDirectory();
+
+         while (dataFile.available()){
+
+            dataString[i] = dataFile.read();
+     
+            if(dataString[i] == '\n'){
+               Cards=atol(dataString);
+               EEPROM.get(eeAddress, CardsCheck);
+
+                    if(Cards != CardsCheck){ //compara q el numero en EEprom sea distinto
+        
+                        EEPROM.put(eeAddress, Cards);
+                        Serial.println("Dato actualizado");
+                     }
+               
+                EEPROM.get(eeAddress, CardsCheck);       
+                eeAddress += sizeof(long);
+                i=0;
+
+            }     else{
+                   i++;
+                  }
+
+          
+          }
+          
+    dataFile.close();
+    
+    Serial.println("done uploading Cards IDs.");
+
+        for(eeAddress;eeAddress < (EEPROM.length()-2);eeAddress+=1){
+        EEPROM.write(eeAddress, 0);
+        }
+
+        EEPROM.get(eeAddnCards, CardsCheck);
+
+        if(nCards != CardsCheck){
+
+            EEPROM.put(eeAddnCards, nCards);      
+        }
+
+        if (!SD.remove("Cardslog.txt")){
+          
+            Serial.println("ERROR!! Cardslog.txt Wasn't deleted...");
+        }
+
+    
+    }    else {
+    // if the file didn't open, print an error:
+    Serial.println("error opening Cardslog.txt file");
+    }
+  } else {
+
+    Serial.println("Cardslog.txt isnt presente. EEPROM memory used");
+    
+    EEPROM.get(eeAddnCards, nCards);
     
   }
+
+  
 }
+  
+
 
 
