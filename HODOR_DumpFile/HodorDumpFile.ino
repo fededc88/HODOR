@@ -6,6 +6,7 @@ bool debug =true;
 
 int i=0;
 int nCards=0;
+int eeAddnCards = EEPROM.length()-2;
 int eeAddress=0;
 
 
@@ -51,12 +52,12 @@ void setup() {
       Serial.print("] :");
       Serial.print(dataString[i]);
       Serial.print(" DEC:");
-      Serial.println(dataString[i],DEC);      
-      
+      Serial.println(dataString[i],DEC);       
 
       
       if(dataString[i] == '\n'){
         Cards=atol(dataString);
+        
         EEPROM.get(eeAddress, CardsCheck);
 
         if(Cards != CardsCheck){ //compara q el numero en EEprom sea distinto
@@ -88,6 +89,20 @@ void setup() {
     dataFile.close();
     
     Serial.println("done uploading Cards IDs.");
+
+    for(eeAddress;eeAddress < (EEPROM.length()-2);eeAddress+=1){
+         EEPROM.write(eeAddress, 0);
+    }
+
+     EEPROM.get(eeAddnCards, CardsCheck);
+
+     if(nCards != CardsCheck){
+
+        EEPROM.put(eeAddnCards, nCards);
+      
+     }
+
+    
 
     if (SD.remove("Cardslog.txt")){
       Serial.println("Cardslog.txt deleted...");
